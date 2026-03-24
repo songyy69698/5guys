@@ -16,7 +16,7 @@
 
 import { buildTradeContext } from "./trades-reader";
 import { AGENTS } from "./agents";
-import { callGemini, log } from "./gemini";
+import { callAI, log } from "./gemini";
 
 // ═══════════════════════════════════════
 // 完整辩论（3轮 5 Agent）
@@ -39,9 +39,9 @@ async function runFullCouncil(days: number): Promise<string> {
     const prompt = `以下是近期的交易数据，请从你的专业角度分析，给出具体的优化建议。\n\n${tradeData}`;
 
     const [alphaR, guardianR, quantR] = await Promise.all([
-        callGemini(AGENTS.alpha.systemPrompt, prompt),
-        callGemini(AGENTS.guardian.systemPrompt, prompt),
-        callGemini(AGENTS.quant.systemPrompt, prompt),
+        callAI(AGENTS.alpha.systemPrompt, prompt),
+        callAI(AGENTS.guardian.systemPrompt, prompt),
+        callAI(AGENTS.quant.systemPrompt, prompt),
     ]);
     log("✅ Round 1 完成");
 
@@ -60,7 +60,7 @@ async function runFullCouncil(days: number): Promise<string> {
         `### 📊 Quant 的建议:\n${quantR}\n\n` +
         `### 原始交易数据（供你交叉验证）:\n${tradeData.slice(0, 2000)}`;
 
-    const psychR = await callGemini(AGENTS.psych.systemPrompt, psychPrompt);
+    const psychR = await callAI(AGENTS.psych.systemPrompt, psychPrompt);
     log("✅ Round 2 完成");
 
     console.log("\n" + "═".repeat(60));
@@ -77,7 +77,7 @@ async function runFullCouncil(days: number): Promise<string> {
         `### 📊 Quant（量化师）:\n${quantR}\n\n` +
         `### 🧠 Psych（质疑者）对 Alpha 和 Quant 的挑战:\n${psychR}`;
 
-    const judgeResult = await callGemini(AGENTS.judge.systemPrompt, judgePrompt);
+    const judgeResult = await callAI(AGENTS.judge.systemPrompt, judgePrompt);
     log("✅ Round 3 完成");
 
     const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
@@ -109,10 +109,12 @@ async function runQuickCouncil(days: number): Promise<string> {
 
     const prompt = `以下是近期的交易数据，请从你的专业角度分析，给出具体的优化建议。\n\n${tradeData}`;
 
-    const [quantR, guardianR] = await Promise.all([
-        callGemini(AGENTS.quant.systemPrompt, prompt),
-        callGemini(AGENTS.guardian.systemPrompt, prompt),
-    ]);
+    log("📊 Quant 分析中...");
+    const quantR = await callAI(AGENTS.quant.systemPrompt, prompt);
+    await new Promise(r => setTimeout(r, 3000)); // 避限流
+
+    log("🛡️ Guardian 分析中...");
+    const guardianR = await callAI(AGENTS.guardian.systemPrompt, prompt);
 
     console.log(`\n📊 Quant:\n${quantR}`);
     console.log(`\n🛡️ Guardian:\n${guardianR}`);
@@ -122,7 +124,7 @@ async function runQuickCouncil(days: number): Promise<string> {
         `### 📊 Quant:\n${quantR}\n\n` +
         `### 🛡️ Guardian:\n${guardianR}`;
 
-    const judgeResult = await callGemini(AGENTS.judge.systemPrompt, judgePrompt);
+    const judgeResult = await callAI(AGENTS.judge.systemPrompt, judgePrompt);
     const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
 
     console.log(`\n⚖️ Judge:\n${judgeResult}`);

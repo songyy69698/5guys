@@ -59,21 +59,71 @@ export interface RawTrade {
     };
 }
 
-/** 读取策略交易日志 (trades.jsonl) */
+/** 读取策略交易日志 (trades.jsonl 或从 trades-history.jsonl 提取) */
 export function readStrategyTrades(days: number = 14): TradeRecord[] {
-    const file = join(TRADES_PATH, "trades.jsonl");
-    if (!existsSync(file)) return [];
+    // 优先读 trades.jsonl（策略级日志）
+    const stratFile = join(TRADES_PATH, "trades.jsonl");
+    if (existsSync(stratFile)) {
+        const cutoff = Date.now() - days * 24 * 3600_000;
+        const lines = readFileSync(stratFile, "utf-8").trim().split("\n");
+        const trades: TradeRecord[] = [];
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const t = JSON.parse(line) as TradeRecord;
+                if (t.ts >= cutoff) trades.push(t);
+            } catch { /* 跳过 */ }
+        }
+        return trades.sort((a, b) => a.ts - b.ts);
+    }
+
+    // 降级：从 trades-history.jsonl 提取平仓记录
+    const histFile = join(TRADES_PATH, "trades-history.jsonl");
+    if (!existsSync(histFile)) return [];
 
     const cutoff = Date.now() - days * 24 * 3600_000;
-    const lines = readFileSync(file, "utf-8").trim().split("\n");
+    const lines = readFileSync(histFile, "utf-8").trim().split("\n");
     const trades: TradeRecord[] = [];
 
     for (const line of lines) {
         if (!line.trim()) continue;
         try {
-            const t = JSON.parse(line) as TradeRecord;
-            if (t.ts >= cutoff) trades.push(t);
-        } catch { /* 跳过损坏行 */ }
+            const raw = JSON.parse(line) as RawTrade;
+            if (raw.ts < cutoff) continue;
+            if (!raw.price || !raw.qty) continue; // 跳过不完整记录
+            // 只看有 realizedPNL 的平仓记录
+            const pnl = parseFloat(raw.raw?.realizedPNL || "0");
+            if (pnl === 0 && !raw.raw?.reduceOnly) continue; // 开仓记录跳过
+
+            // 从原始记录构造简化的 TradeRecord
+            trades.push({
+                ts: raw.ts,
+                date: raw.date,
+                symbol: raw.symbol,
+                side: raw.side === "BUY" ? "long" : "short",
+                window: "",
+                dayOfWeek: new Date(raw.ts).getDay(),
+                entryPrice: raw.price,
+                signalPrice: raw.price,
+                slippage: 0,
+                pnlPt: pnl / (raw.qty || 1),
+                netPnlU: pnl - raw.fee,
+                reason: raw.raw?.reduceOnly ? "平仓" : "开仓",
+                holdMinutes: 0,
+                bestProfitPt: 0,
+                breakevenHit: false,
+                slPt: 0,
+                tpPt: 0,
+                qty: raw.qty,
+                leverage: raw.raw?.leverage || 150,
+                atr: 0,
+                mtfScore: 0,
+                fundingRate: 0,
+                ema3: 0, ema7: 0, ema20: 0,
+                volRatio: 0,
+                pocSlope: 0,
+            });
+        } catch { /* 跳过 */ }
     }
 
     return trades.sort((a, b) => a.ts - b.ts);
