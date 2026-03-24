@@ -1,0 +1,4 @@
+node_modules/
+dist/
+data/evolve-state.json
+.env

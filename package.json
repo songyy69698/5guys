@@ -1,0 +1,16 @@
+{
+  "name": "5guys",
+  "version": "1.0.0",
+  "description": "🏛️ 5 Agent 策略优化顾问团 — 多AI辩论式交易策略分析与优化系统",
+  "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "council": "bun run src/council.ts",
+    "council:quick": "bun run src/council.ts quick",
+    "dev": "bun run src/council.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5.4.0"
+  }
+}
