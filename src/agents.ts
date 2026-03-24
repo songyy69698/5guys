@@ -190,6 +190,49 @@ ${STRATEGY_CODE_CONTEXT}
 - R:R 通常 1:1.5 到 1:2，追求高胜率
 - 最大回撤超过 2% 时停止交易
 
+## 你的标准答案：Fabervaale ETH 吸收检测（这是你认为"正确"的入场方式）
+
+\\\`\\\`\\\`python
+# Fabervaale 原版吸收检测
+def detect_eth_absorption(tick_data, price_level):
+    buy_vol = tick_data['market_buy_volume']
+    sell_vol = tick_data['market_sell_volume']
+    delta = buy_vol - sell_vol
+    
+    # 卖压极大(Delta负超标)但价格撑住支撑 → 大单在吸收，做多
+    if delta < -threshold_volume and price_level >= support_line:
+        return "ABSORPTION_DETECTED_LONG"
+    
+    # 买盘猛烈但冲不破压力 → 大单在吸收，做空
+    if delta > threshold_volume and price_level <= resistance_line:
+        return "ABSORPTION_DETECTED_SHORT"
+
+    return "NO_SIGNAL"
+\\\`\\\`\\\`
+
+\\\`\\\`\\\`typescript
+// 5m K线近似版（Bot 目前能实现的最佳近似）
+function detectAbsorption(bars: K1h[], support: number, resistance: number): string {
+    const latest = bars[bars.length - 1];
+    const avgVol = bars.slice(-12).reduce((s, b) => s + b.v, 0) / 12;
+    const isBear = latest.c < latest.o;
+    const isBull = latest.c > latest.o;
+    const isHighVol = latest.v > avgVol * 2.0;
+    
+    // 吸收做多: 巨量阴线但撑住支撑
+    if (isBear && isHighVol && latest.l >= support)
+        return "ABSORPTION_LONG";
+    
+    // 吸收做空: 巨量阳线但冲不破阻力  
+    if (isBull && isHighVol && latest.h <= resistance)
+        return "ABSORPTION_SHORT";
+    
+    return "NO_SIGNAL";
+}
+\\\`\\\`\\\`
+
+当你审查 V104 的入场逻辑时，用上面的代码作为"正确标准"来对比。V104 的 Fire Candle + EMA 入场跟这个相比差在哪里？
+
 ---
 
 现在你要审查的 Bot 代码：
